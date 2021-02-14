@@ -3,7 +3,9 @@
 import sys
 import os
 import yaml
+from datetime import datetime
 from Init import Init
+from Backup import Backup
 
 
 def main(settings):
@@ -22,7 +24,9 @@ def main(settings):
         print('Double defined priorities in {} found'.format(settings))
         raise ValueError
     # Setup base folders and if needed create a new full backup
-    Init(yml_settings)
+    now = datetime.now()
+    init = Init(now, yml_settings)
+    backup = Backup(yml_settings, init.get_backup_target(),  now)
 
 
 if __name__ == '__main__':
