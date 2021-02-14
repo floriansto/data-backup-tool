@@ -6,25 +6,30 @@ from datetime import timedelta
 
 
 class Init:
-    def __init__(self, settings=None):
+    def __init__(self, now, settings):
         """
         Default constructor for the settings class
-        :param settings: Path to the settings yaml file
+        :param settings: Parsed configuration yaml file
+        :param now: Current time as datetime object
         :raises ValueError if a nonexistent settings file is passed
         """
-        if settings is None:
-            print('Error: No settings provided')
-            raise ValueError
-        self.date_format = '%Y-%m-%d_%H-%M-%S'
+        self.date_format = settings['backup']['date_format']
         self.settings = settings
+        self.now = now
         backup_dir_name = self.settings['backup']['latest']
         backup_dir_root = self.settings['backup']['target_dir']
-        backup_dir = os.path.join(backup_dir_root, backup_dir_name)
-        self.init(backup_dir, self.settings['backup']['full'], False)
+        self.backup_dir = os.path.join(backup_dir_root, backup_dir_name)
+        self.init(self.backup_dir, self.settings['backup']['full'], False)
         for i in self.settings['backup']['intervals']:
-            backup_dir_int = os.path.join(backup_dir, i['name'])
+            backup_dir_int = os.path.join(self.backup_dir, i['name'])
             if not os.path.isdir(backup_dir_int):
                 os.makedirs(backup_dir_int)
+
+    def get_backup_target(self):
+        """
+        Return the path to the latest backup
+        """
+        return os.path.join(self.settings['backup']['target_dir'], os.readlink(self.backup_dir))
 
     def init(self, backup_dir, config, sync=False):
         """
@@ -33,8 +38,7 @@ class Init:
 
         cycle = config['cycle']
 
-        curr_time = datetime.now()
-        name = curr_time.strftime(self.date_format)
+        name = self.now.strftime(self.date_format)
         new_dir = os.path.join(os.path.dirname(backup_dir), name)
 
         # Check if the specified backup directory exists
@@ -51,7 +55,7 @@ class Init:
                                           self.date_format)
 
             # Check if a new full backup needs to be created
-            if curr_time - last_time > delta:
+            if self.now - last_time > delta:
                 # Remove symlink to the last full backup
                 os.remove(backup_dir)
                 # Create new backup dir with the current time
