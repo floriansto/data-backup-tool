@@ -17,6 +17,7 @@ from Backup import Backup
 @click.option('-n', '--no-relatives', is_flag=True, default=False, help='Do not use relative path names. Disables the -R option of rsync.')
 @click.argument('config', type=str)
 def main(config, host, port, user, ssh, no_relatives):
+
     # Parse configuration yaml file
     if config is None or not os.path.isfile(config):
         print('Error: invalid config file: {}'.format(config))
