@@ -97,9 +97,17 @@ class Backup:
         latest = self.settings['backup']['latest']
         if ret:
             dest = os.path.join(self.backup_dir, interval['name'], latest).rstrip('/')
+            rels = 'R' if not self.settings['no_rels'] else ''
+            ssh = '-e "ssh -p {}" {}@{}:'.format(self.settings['port'], self.settings['user'], self.settings['host']) if self.settings['ssh'] else ''
+            src_div = ' :' if self.settings['ssh'] else ''
+            src = src_div.join(self.settings['backup']['src'])
+            if self.settings['backup']['exclude'] is not None:
+                exclude = '--exclude=' + ' --exclude='.join(self.settings['backup']['exclude'])
+            else:
+                exclude = ''
             print('Rsync from backup to {}'.format(self.intervals[0]['name']))
-            os.system('rsync -ahsR -zz --no-perms --info=progress2 --delete -r {} {}'
-                      .format(self.settings['backup']['src_dir'], dest))
+            arg = 'rsync -rahs{} -zz --no-perms --info=progress2 --delete-excluded --delete {} {}{} {}'.format(rels, exclude, ssh, src, dest)
+            os.system(arg)
 
     def lower_prio_backups(self):
         """
