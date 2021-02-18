@@ -12,14 +12,14 @@ class Init:
         :param now: Current time as datetime object
         :raises ValueError if a nonexistent settings file is passed
         """
-        self.date_format = settings['backup']['date_format']
+        self.date_format = settings['date_format']
         self.settings = settings
         self.now = now
-        backup_dir_name = self.settings['backup']['latest']
-        backup_dir_root = self.settings['backup']['target_dir']
+        backup_dir_name = self.settings['latest']
+        backup_dir_root = self.settings['target_dir']
         self.backup_dir = os.path.join(backup_dir_root, backup_dir_name)
-        self.init(self.backup_dir, self.settings['backup']['full'])
-        for i in self.settings['backup']['intervals']:
+        self.init(self.backup_dir, self.settings['full'])
+        for i in self.settings['intervals']:
             backup_dir_int = os.path.join(self.backup_dir, i['name'])
             if not os.path.isdir(backup_dir_int):
                 os.makedirs(backup_dir_int)
@@ -28,7 +28,7 @@ class Init:
         """
         Return the path to the latest backup
         """
-        return os.path.join(self.settings['backup']['target_dir'], os.readlink(self.backup_dir))
+        return os.path.join(self.settings['target_dir'], os.readlink(self.backup_dir))
 
     def init(self, backup_dir, config):
         """

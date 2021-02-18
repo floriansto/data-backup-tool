@@ -33,7 +33,7 @@ def main(config, host, port, user, ssh, no_relatives):
 
     # Check for doubled entries in the prio field
     prios = []
-    for i in yml_config['backup']['intervals']:
+    for i in yml_config['intervals']:
         prios.append(i['prio'])
     if len(prios) != len(set(prios)):
         print('Double defined priorities in {} found'.format(config))

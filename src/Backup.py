@@ -7,7 +7,7 @@ import util
 class Backup:
     def __init__(self, settings, backup_dir, now):
         self.settings = settings
-        self.date_format = settings['backup']['date_format']
+        self.date_format = settings['date_format']
         self.now = now
         self.intervals = []
         self.backup_dir = backup_dir
@@ -21,7 +21,7 @@ class Backup:
         high to low.
         """
         used_idx = []
-        intervals = self.settings['backup']['intervals']
+        intervals = self.settings['intervals']
         for _ in range(len(intervals)):
             highest_prio = -1
             highest_prio_idx = 0
@@ -52,7 +52,7 @@ class Backup:
         """
         delta = util.t_delta_from_config(interval['cycle'])
         backup_dir = os.path.join(self.backup_dir, interval['name'])
-        latest = os.path.join(backup_dir, self.settings['backup']['latest'])
+        latest = os.path.join(backup_dir, self.settings['latest'])
         if os.path.exists(latest):
             t_latest = util.time_from_str(os.path.basename(os.readlink(latest)), self.date_format)
         else:
@@ -94,7 +94,7 @@ class Backup:
         """
         interval = self.intervals[0]
         ret = self.prepare_backup(interval)
-        latest = self.settings['backup']['latest']
+        latest = self.settings['latest']
         if ret:
             dest = os.path.join(self.backup_dir, interval['name'], latest).rstrip('/')
             rels = 'R' if not self.settings['no_rels'] else ''
@@ -106,10 +106,10 @@ class Backup:
             else:
                 ssh = ''
                 src_div = ''
-            src = src_div.join(self.settings['backup']['src'])
+            src = src_div.join(self.settings['src'])
             # Build exclude patterns
-            if self.settings['backup']['exclude'] is not None:
-                exclude = '--exclude=' + ' --exclude='.join(self.settings['backup']['exclude'])
+            if self.settings['exclude'] is not None:
+                exclude = '--exclude=' + ' --exclude='.join(self.settings['exclude'])
             else:
                 exclude = ''
             print('Rsync from backup to {}'.format(self.intervals[0]['name']))
@@ -123,7 +123,7 @@ class Backup:
         If the time interval is reached, create hardlinks from the latest backup with the highest priority to a
         new backup of the selected priority
         """
-        latest = self.settings['backup']['latest']
+        latest = self.settings['latest']
         src = os.path.join(self.backup_dir, self.intervals[0]['name'], latest).rstrip('/')
         for i in range(len(self.intervals) - 1):
             interval = self.intervals[i + 1]
