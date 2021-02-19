@@ -2,7 +2,11 @@
 
 import os
 import util
+import logging
+import subprocess
 
+
+logger = logging.getLogger('backup')
 
 class Backup:
     def __init__(self, settings, backup_dir, now):
@@ -34,6 +38,7 @@ class Backup:
             if found:
                 self.intervals.append(intervals[highest_prio_idx])
                 used_idx.append(highest_prio_idx)
+        logger.info('Intervals from high to low priority: {}'.format(', '.join([i['name'] for i in self.intervals])))
 
     def prepare_backup(self, interval):
         """
@@ -50,6 +55,7 @@ class Backup:
         :param interval: Configuration for the selected interval
         :return: True if a backup should be done
         """
+        logger.debug('Preparing for backup')
         delta = util.t_delta_from_config(interval['cycle'])
         backup_dir = os.path.join(self.backup_dir, interval['name'])
         latest = os.path.join(backup_dir, self.settings['latest'])
@@ -61,6 +67,9 @@ class Backup:
         # Check if the timedelta between the last backup and now exceeds
         # the configured maximum
         if self.now - t_latest < delta:
+            logger.info('Skip {} backup'.format(interval['name']))
+            logger.debug('Timedelta between last {} backup and now is too narrow for a new backup.'.format(interval['name']))
+            logger.debug('Next backup will be possible at {}'.format((self.now + delta).strftime(self.date_format)))
             return False
 
         # Get a list of all backups for the selected interval
@@ -73,14 +82,20 @@ class Backup:
         if len(folders_filtered) >= interval['num']:
             # More or equal backups exist: Recycle the oldest backup
             folder_from = sorted(folders_filtered)[0]
+            logger.debug('Rename {} to {}'.format(folder_from, new_folder))
+            # Rename oldest backup
             os.system('mv {} {}'.format(folder_from, new_folder))
-            os.system('cp -urldf {} {}'.format(latest.rstrip('/') + '/*', new_folder))
+            # Update it to the newest state
+            sync_src = latest.rstrip('/') + '/*'
+            logger.debug('Hardlink new files from {}'.format(sync_src))
+            os.system('cp -urldf {} {}'.format(sync_src, new_folder))
         elif len(folders_filtered) == 0:
             # No backups exist: Create a new folder
             os.makedirs(new_folder)
         else:
             # Less backups exist: Hardlink from the latest backup to the new backup
             folder_from = sorted(folders_filtered)[-1]
+            logger.debug('Hardlink from {} to new backup {}'.format(folder_from, new_folder))
             os.system('cp -urldf {} {}'.format(folder_from, new_folder))
         if os.path.exists(latest):
             os.remove(latest)
@@ -96,26 +111,41 @@ class Backup:
         ret = self.prepare_backup(interval)
         latest = self.settings['latest']
         if ret:
+            logger.info('Start {} backup'.format(interval['name']))
             dest = os.path.join(self.backup_dir, interval['name'], latest).rstrip('/')
             rels = 'R' if not self.settings['no_rels'] else ''
             # Build string for the ssh connection if needed
             if self.settings['ssh']:
-                ssh = '-e "ssh -p {}" {}@{}:'.format(self.settings['port'], self.settings['user'],
-                                                     self.settings['host'])
+                ssh = ['-e', 'ssh -p {}'.format(self.settings['port'])]
+                src = '{}@{}:'.format(self.settings['user'], self.settings['host'])
                 src_div = ' :'
             else:
-                ssh = ''
-                src_div = ''
-            src = src_div.join(self.settings['src'])
+                ssh = []
+                src = ''
+                src_div = ' '
+            src += src_div.join(self.settings['src'])
             # Build exclude patterns
             if self.settings['exclude'] is not None:
-                exclude = '--exclude=' + ' --exclude='.join(self.settings['exclude'])
+                exclude = '--exclude="' + '" --exclude="'.join(self.settings['exclude']) + '"'
             else:
                 exclude = ''
-            print('Rsync from backup to {}'.format(self.intervals[0]['name']))
-            arg = 'rsync -rahs{} -zz --no-perms --info=progress2 --delete-excluded --delete {} {}{} {}'\
-                .format(rels, exclude, ssh, src, dest)
-            os.system(arg)
+            # Build command for the subprocess call
+            arg = 'rsync -rahs{} -zz --no-perms --info=progress2 --delete-excluded --delete {}'\
+                .format(rels, exclude)
+            cmd = arg.split(' ')
+            cmd += ssh
+            cmd += src.split(' ')
+            cmd += [dest]
+            logger.debug('Run command: {}'.format(arg))
+            ret = subprocess.run(cmd, stderr=subprocess.PIPE)
+            # Check for errors
+            if ret.returncode != 0:
+                logger.error('Rsync exited with  {}'.format(ret.returncode))
+                logger.error(' '.join(ret.args))
+                logger.error(ret.stderr)
+                logger.error('Aborting backup')
+                raise subprocess.CalledProcessError(returncode=ret.returncode, cmd = ret.args, stderr = ret.stdout)
+            logger.info('Finished {} backup'.format(interval['name']))
 
     def lower_prio_backups(self):
         """
@@ -129,6 +159,9 @@ class Backup:
             interval = self.intervals[i + 1]
             ret = self.prepare_backup(interval)
             if ret:
+                logger.info('Start {} backup'.format(interval['name']))
                 dest = os.path.join(self.backup_dir, interval['name'], latest).rstrip('/')
-                print('Hardlink from {} to {}'.format(self.intervals[0]['name'], interval['name']))
-                os.system('cp -urldf {} {}'.format(src.rstrip('/') + '/*', dest))
+                src_sync = src.rstrip('/') + '/*'
+                logger.debug('Hardlink from {} to {}'.format(src_sync, dest))
+                os.system('cp -urldf {} {}'.format(src_sync, dest))
+                logger.info('Finished {} backup'.format(interval['name']))

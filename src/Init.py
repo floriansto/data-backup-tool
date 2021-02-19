@@ -2,7 +2,11 @@
 
 import os
 import util
+import logging
+from datetime import datetime
 
+
+logger = logging.getLogger('init')
 
 class Init:
     def __init__(self, now, settings):
@@ -43,6 +47,7 @@ class Init:
         # Check if the specified backup directory exists
         # if not, create a new one with a timestamp and a symlink to it
         if not os.path.isdir(backup_dir):
+            logger.info('Create new backup dir at {}'.format(new_dir))
             os.makedirs(new_dir)
             os.symlink(os.path.basename(new_dir), backup_dir)
         else:
@@ -54,6 +59,7 @@ class Init:
 
             # Check if a new full backup needs to be created
             if self.now - last_time > delta:
+                logger.info('Create a new full backup at {}'.format(new_dir))
                 # Remove symlink to the last full backup
                 os.remove(backup_dir)
                 # Create new backup dir with the current time
