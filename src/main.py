@@ -23,7 +23,7 @@ from Backup import Backup
 def main(config, host, port, user, ssh, no_relatives, verbose):
 
     now = datetime.now()
-    logfile = 'log/backup.log'
+    logfile = '/var/log/dbt/backup_{}.log'.format(host)
     if not os.path.exists(os.path.dirname(logfile)):
         os.makedirs(os.path.dirname(logfile))
     rotate_logs =  os.path.exists(logfile)
