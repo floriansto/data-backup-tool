@@ -2,3 +2,4 @@ venv
 *.default
 .idea
 __pycache__
+*.log*

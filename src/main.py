@@ -5,6 +5,7 @@ import os
 import yaml
 import click
 import logging
+import subprocess
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
 from Init import Init
@@ -22,14 +23,22 @@ from Backup import Backup
 def main(config, host, port, user, ssh, no_relatives, verbose):
 
     now = datetime.now()
+    rotate_logs =  os.path.exists('backup.log')
 
     loglevel = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(format='[%(asctime)s] %(levelname)-8s %(filename)-10s %(lineno)-4d %(message)s', level=loglevel, handlers=[RotatingFileHandler('backup.log', maxBytes=50000, backupCount=10)])
-    logger = logging.getLogger('main')
+    logger = logging.getLogger()
+    logger.setLevel(loglevel)
+    handler = RotatingFileHandler('backup.log', maxBytes=50000, backupCount=10)
+    handler.setFormatter(logging.Formatter('[%(asctime)s] %(levelname)-8s %(filename)-10s %(lineno)-4d %(message)s'))
+    logger.addHandler(handler)
+    if rotate_logs:
+        logger.handlers[0].doRollover()
+
+    logger.info('==============================================')
 
     # Parse configuration yaml file
     if config is None or not os.path.isfile(config):
-        print('Error: invalid config file: {}'.format(config))
+        logger.error('Error: invalid config file: {}'.format(config))
         raise ValueError
     with open(config) as f:
         yml_config = yaml.safe_load(f)
@@ -40,7 +49,6 @@ def main(config, host, port, user, ssh, no_relatives, verbose):
     yml_config['no_rels'] = no_relatives
     yml_config['ssh'] = ssh
 
-    logger.info('==============================================')
     logger.debug('Backup invoked with the following options:')
     logger.info('  Configuration file: {}'.format(config))
     logger.debug('  Don''t use relative paths: {}'.format(no_relatives))
@@ -49,6 +57,13 @@ def main(config, host, port, user, ssh, no_relatives, verbose):
         logger.debug('  host: {}'.format(host))
         logger.debug('  user: {}'.format(user))
         logger.debug('  port: {}'.format(port))
+
+    cmd = ['nc', '-z', '-v', host, str(port)]
+    ret = subprocess.run(cmd, stderr=subprocess.PIPE)
+    if ret.returncode != 0:
+        logger.error('Port {} is not open on {}'.format(port, host))
+        logger.error(ret.stderr)
+        exit(ret.returncode)
 
     # Check for doubled entries in the prio field
     prios = []
