@@ -42,7 +42,15 @@ def main(config, host, port, user, ssh, no_relatives, verbose):
     # Parse configuration yaml file
     if config is None or not os.path.isfile(config):
         logger.error('Error: invalid config file: {}'.format(config))
-        raise ValueError
+        raise FileNotFoundError
+
+    lockfile = config + '.lock'
+    if os.path.exists(lockfile):
+        logger.error('{} exists in the filesystem'.format(lockfile))
+        raise FileExistsError
+
+    open(lockfile, 'a').close()
+
     with open(config) as f:
         yml_config = yaml.safe_load(f)
 
@@ -51,6 +59,7 @@ def main(config, host, port, user, ssh, no_relatives, verbose):
     yml_config['host'] = host
     yml_config['no_rels'] = no_relatives
     yml_config['ssh'] = ssh
+    yml_config['lockfile'] = lockfile
 
     logger.debug('Backup invoked with the following options:')
     logger.info('  Configuration file: {}'.format(config))
@@ -74,10 +83,12 @@ def main(config, host, port, user, ssh, no_relatives, verbose):
         prios.append(i['prio'])
     if len(prios) != len(set(prios)):
         logger.error('Double defined priorities in {} found'.format(config))
-        raise ValueError
+        raise KeyError
     # Setup base folders and if needed create a new full backup
     init = Init(now, yml_config)
     backup = Backup(yml_config, init.get_backup_target(),  now)
+
+    os.remove(lockfile)
 
     end = datetime.now()
     seconds = (end - now).total_seconds()

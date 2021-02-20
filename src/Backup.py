@@ -47,6 +47,7 @@ class Backup:
         logger.error('Remove active backup and restore symlink to newest bakup')
         util.cleanup(self.current_target_dir)
         self.current_target_dir = None
+        os.remove(self.settings['lockfile'])
         sys.exit(signum)
 
     def sort_intervals(self):
