@@ -23,12 +23,15 @@ from Backup import Backup
 def main(config, host, port, user, ssh, no_relatives, verbose):
 
     now = datetime.now()
-    rotate_logs =  os.path.exists('backup.log')
+    logfile = 'log/backup.log'
+    if not os.path.exists(os.path.dirname(logfile)):
+        os.makedirs(os.path.dirname(logfile))
+    rotate_logs =  os.path.exists(logfile)
 
     loglevel = logging.DEBUG if verbose else logging.INFO
     logger = logging.getLogger()
     logger.setLevel(loglevel)
-    handler = RotatingFileHandler('backup.log', maxBytes=50000, backupCount=10)
+    handler = RotatingFileHandler(logfile, maxBytes=50000, backupCount=10)
     handler.setFormatter(logging.Formatter('[%(asctime)s] %(levelname)-8s %(filename)-10s %(lineno)-4d %(message)s'))
     logger.addHandler(handler)
     if rotate_logs:
