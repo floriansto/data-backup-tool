@@ -208,7 +208,7 @@ class Backup:
             interval = self.intervals[i + 1]
             ret = self.prepare_backup(interval)
             if not ret:
-                return
+                continue
 
             logger.info('Start {} backup'.format(interval['name']))
             dest = os.path.join(self.backup_dir, interval['name'], latest + '_new').rstrip('/')
