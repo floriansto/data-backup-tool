@@ -19,14 +19,17 @@ class Init:
         self.date_format = settings['date_format']
         self.settings = settings
         self.now = now
-        backup_dir_name = self.settings['latest']
+        latest = self.settings['latest']
         backup_dir_root = self.settings['target_dir']
-        self.backup_dir = os.path.join(backup_dir_root, backup_dir_name)
+        self.backup_dir = os.path.join(backup_dir_root, latest)
         self.init(self.backup_dir, self.settings['full'])
         for i in self.settings['intervals']:
             backup_dir_int = os.path.join(self.backup_dir, i['name'])
             if not os.path.isdir(backup_dir_int):
                 os.makedirs(backup_dir_int)
+            # If needed do a cleanup (after a crash which could not be catched)
+            if os.path.exists(os.path.join(backup_dir_int, latest + '_new')):
+                util.cleanup(os.path.join(backup_dir_int, latest + '_new'))
 
     def get_backup_target(self):
         """

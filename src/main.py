@@ -5,6 +5,7 @@ import os
 import yaml
 import click
 import logging
+from logging.handlers import RotatingFileHandler
 from datetime import datetime
 from Init import Init
 from Backup import Backup
@@ -16,12 +17,14 @@ from Backup import Backup
 @click.option('-p', '--port', default=22, type=int, help='When using ssh, use this port')
 @click.option('-u', '--user', default='root', type=str, help='When using ssh, use this user')
 @click.option('-n', '--no-relatives', is_flag=True, default=False, help='Do not use relative path names. Disables the -R option of rsync.')
+@click.option('-v', '--verbose', is_flag=True, default=False, help='Additional output to the logfile')
 @click.argument('config', type=str)
-def main(config, host, port, user, ssh, no_relatives):
+def main(config, host, port, user, ssh, no_relatives, verbose):
 
     now = datetime.now()
 
-    logging.basicConfig(format='[%(asctime)s] %(levelname)-8s %(name)-10s %(message)s', filename='backup.log', level=logging.INFO)
+    loglevel = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(format='[%(asctime)s] %(levelname)-8s %(filename)-10s %(lineno)-4d %(message)s', level=loglevel, handlers=[RotatingFileHandler('backup.log', maxBytes=50000, backupCount=10)])
     logger = logging.getLogger('main')
 
     # Parse configuration yaml file

@@ -2,6 +2,18 @@
 
 from datetime import datetime
 from datetime import timedelta
+import os
+import shutil
+
+
+def cleanup(path):
+    """
+    Cleanup after e.g. a crash or SIGINT
+    :param path: Path to check (Symlink path to last (failed) backup)
+    """
+    if path is not None and os.path.exists(path):
+        shutil.rmtree(os.path.realpath(path))
+        os.remove(path)
 
 
 def t_delta_from_config(cycle):

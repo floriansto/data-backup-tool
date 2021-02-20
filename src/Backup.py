@@ -4,9 +4,14 @@ import os
 import util
 import logging
 import subprocess
+import glob
+import signal
+import sys
+import shutil
 
 
 logger = logging.getLogger('backup')
+
 
 class Backup:
     def __init__(self, settings, backup_dir, now):
@@ -15,9 +20,34 @@ class Backup:
         self.now = now
         self.intervals = []
         self.backup_dir = backup_dir
+        self.setup()
         self.sort_intervals()
         self.highest_prio_backup()
         self.lower_prio_backups()
+        self.current_target_dir = None
+
+    def setup(self):
+        """
+        Setup handlers for interrupt signals
+        """
+        signal.signal(signal.SIGINT, self.interrupt_handler)
+        signal.signal(signal.SIGTERM, self.interrupt_handler)
+        signal.signal(signal.SIGSEGV, self.interrupt_handler)
+        signal.signal(signal.SIGHUP, self.interrupt_handler)
+
+    def interrupt_handler(self, signum, frame):
+        """
+        Handler for interrupt signals, deletes the in progress backup and
+        restores the symlink to the latest backup
+        :param signum: Number of the interupt signal
+        :param frame: stack frame
+        """
+        logger.error('Got signal {}. Stop process and cleanup'.format(signum))
+        logger.error('Current active backup: {}'.format(os.path.realpath(self.current_target_dir)))
+        logger.error('Remove active backup and restore symlink to newest bakup')
+        util.cleanup(self.current_target_dir)
+        self.current_target_dir = None
+        sys.exit(signum)
 
     def sort_intervals(self):
         """
@@ -39,6 +69,19 @@ class Backup:
                 self.intervals.append(intervals[highest_prio_idx])
                 used_idx.append(highest_prio_idx)
         logger.info('Intervals from high to low priority: {}'.format(', '.join([i['name'] for i in self.intervals])))
+
+    def copy(self, src, dest):
+        files = glob.glob(src)
+        cmd = ['cp', '-urldf'] + files + [dest]
+        logger.debug('Run command: {}'.format(' '.join(cmd)))
+        ret = subprocess.run(cmd, stderr=subprocess.PIPE)
+        # Check for errors
+        if ret.returncode != 0:
+            logger.error('cp exited with  {}'.format(ret.returncode))
+            logger.error(' '.join(ret.args))
+            logger.error(ret.stderr)
+            logger.error('Aborting backup')
+            raise subprocess.CalledProcessError(returncode=ret.returncode, cmd = ret.args, stderr = ret.stdout)
 
     def prepare_backup(self, interval):
         """
@@ -84,11 +127,11 @@ class Backup:
             folder_from = sorted(folders_filtered)[0]
             logger.debug('Rename {} to {}'.format(folder_from, new_folder))
             # Rename oldest backup
-            os.system('mv {} {}'.format(folder_from, new_folder))
+            shutil.move(folder_from, new_folder)
             # Update it to the newest state
             sync_src = latest.rstrip('/') + '/*'
             logger.debug('Hardlink new files from {}'.format(sync_src))
-            os.system('cp -urldf {} {}'.format(sync_src, new_folder))
+            self.copy(sync_src, new_folder)
         elif len(folders_filtered) == 0:
             # No backups exist: Create a new folder
             os.makedirs(new_folder)
@@ -96,10 +139,8 @@ class Backup:
             # Less backups exist: Hardlink from the latest backup to the new backup
             folder_from = sorted(folders_filtered)[-1]
             logger.debug('Hardlink from {} to new backup {}'.format(folder_from, new_folder))
-            os.system('cp -urldf {} {}'.format(folder_from, new_folder))
-        if os.path.exists(latest):
-            os.remove(latest)
-        os.symlink(os.path.basename(new_folder), latest)
+            self.copy(folder_from, new_folder)
+        os.symlink(os.path.basename(new_folder), latest + '_new')
         return True
 
     def highest_prio_backup(self):
@@ -110,42 +151,50 @@ class Backup:
         interval = self.intervals[0]
         ret = self.prepare_backup(interval)
         latest = self.settings['latest']
-        if ret:
-            logger.info('Start {} backup'.format(interval['name']))
-            dest = os.path.join(self.backup_dir, interval['name'], latest).rstrip('/')
-            rels = 'R' if not self.settings['no_rels'] else ''
-            # Build string for the ssh connection if needed
-            if self.settings['ssh']:
-                ssh = ['-e', 'ssh -p {}'.format(self.settings['port'])]
-                src = '{}@{}:'.format(self.settings['user'], self.settings['host'])
-                src_div = ' :'
-            else:
-                ssh = []
-                src = ''
-                src_div = ' '
-            src += src_div.join(self.settings['src'])
-            # Build exclude patterns
-            if self.settings['exclude'] is not None:
-                exclude = '--exclude="' + '" --exclude="'.join(self.settings['exclude']) + '"'
-            else:
-                exclude = ''
-            # Build command for the subprocess call
-            arg = 'rsync -rahs{} -zz --no-perms --info=progress2 --delete-excluded --delete {}'\
-                .format(rels, exclude)
-            cmd = arg.split(' ')
-            cmd += ssh
-            cmd += src.split(' ')
-            cmd += [dest]
-            logger.debug('Run command: {}'.format(arg))
-            ret = subprocess.run(cmd, stderr=subprocess.PIPE)
-            # Check for errors
-            if ret.returncode != 0:
-                logger.error('Rsync exited with  {}'.format(ret.returncode))
-                logger.error(' '.join(ret.args))
-                logger.error(ret.stderr)
-                logger.error('Aborting backup')
-                raise subprocess.CalledProcessError(returncode=ret.returncode, cmd = ret.args, stderr = ret.stdout)
-            logger.info('Finished {} backup'.format(interval['name']))
+        if not ret:
+            return
+
+        logger.info('Start {} backup'.format(interval['name']))
+        dest = os.path.join(self.backup_dir, interval['name'], latest + '_new').rstrip('/')
+        last = os.path.join(self.backup_dir, interval['name'], latest)
+        self.current_target_dir = dest
+        rels = 'R' if not self.settings['no_rels'] else ''
+        # Build string for the ssh connection if needed
+        if self.settings['ssh']:
+            ssh = ['-e', 'ssh -p {}'.format(self.settings['port'])]
+            src = '{}@{}:'.format(self.settings['user'], self.settings['host'])
+            src_div = ' :'
+        else:
+            ssh = []
+            src = ''
+            src_div = ' '
+        src += src_div.join(self.settings['src'])
+        # Build exclude patterns
+        if self.settings['exclude'] is not None:
+            exclude = '--exclude=' + ' --exclude='.join(self.settings['exclude'])
+        else:
+            exclude = ''
+        # Build command for the subprocess call
+        arg = 'rsync -rahs{} -zz --no-perms --info=progress2 --delete-excluded --delete {}'\
+            .format(rels, exclude)
+        cmd = arg.split(' ')
+        cmd += ssh
+        cmd += src.split(' ')
+        cmd += [dest]
+        logger.debug('Run command: {}'.format(' '.join(cmd)))
+        ret = subprocess.run(cmd, stderr=subprocess.PIPE)
+        # Check for errors
+        if ret.returncode != 0:
+            logger.error('Rsync exited with  {}'.format(ret.returncode))
+            logger.error(' '.join(ret.args))
+            logger.error(ret.stderr)
+            logger.error('Aborting backup')
+            raise subprocess.CalledProcessError(returncode=ret.returncode, cmd = ret.args, stderr = ret.stdout)
+        logger.info('Finished {} backup'.format(interval['name']))
+        if os.path.exists(last):
+            os.remove(last)
+        shutil.move(dest, last)
+        self.current_target_dir = None
 
     def lower_prio_backups(self):
         """
@@ -158,10 +207,18 @@ class Backup:
         for i in range(len(self.intervals) - 1):
             interval = self.intervals[i + 1]
             ret = self.prepare_backup(interval)
-            if ret:
-                logger.info('Start {} backup'.format(interval['name']))
-                dest = os.path.join(self.backup_dir, interval['name'], latest).rstrip('/')
-                src_sync = src.rstrip('/') + '/*'
-                logger.debug('Hardlink from {} to {}'.format(src_sync, dest))
-                os.system('cp -urldf {} {}'.format(src_sync, dest))
-                logger.info('Finished {} backup'.format(interval['name']))
+            if not ret:
+                return
+
+            logger.info('Start {} backup'.format(interval['name']))
+            dest = os.path.join(self.backup_dir, interval['name'], latest + '_new').rstrip('/')
+            last = os.path.join(self.backup_dir, interval['name'], latest)
+            self.current_target_dir = dest
+            sync_src = src.rstrip('/') + '/*'
+            logger.debug('Hardlink from {} to {}'.format(sync_src, dest))
+            self.copy(sync_src, dest)
+            logger.info('Finished {} backup'.format(interval['name']))
+            if os.path.exists(last):
+                os.remove(last)
+            shutil.move(dest, last)
+            self.current_target_dir = None
