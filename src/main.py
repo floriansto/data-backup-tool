@@ -70,12 +70,12 @@ def main(config, host, port, user, ssh, no_relatives, verbose):
         logger.debug('  user: {}'.format(user))
         logger.debug('  port: {}'.format(port))
 
-    cmd = ['nc', '-z', '-v', host, str(port)]
-    ret = subprocess.run(cmd, stderr=subprocess.PIPE)
-    if ret.returncode != 0:
-        logger.error('Port {} is not open on {}'.format(port, host))
-        logger.error(ret.stderr)
-        exit(ret.returncode)
+        cmd = ['nc', '-z', '-v', host, str(port)]
+        ret = subprocess.run(cmd, stderr=subprocess.PIPE)
+        if ret.returncode != 0:
+            logger.error('Port {} is not open on {}'.format(port, host))
+            logger.error(ret.stderr)
+            exit(ret.returncode)
 
     # Check for doubled entries in the prio field
     prios = []
