@@ -8,7 +8,7 @@ import glob
 import signal
 import sys
 import shutil
-
+from datetime import timedelta
 
 logger = logging.getLogger('backup')
 
@@ -115,9 +115,11 @@ class Backup:
         else:
             t_latest = util.time_from_str('0', '%S')
 
+        # Tolerance for delta check between now and last backup
+        tolerance = timedelta(seconds=5)
         # Check if the timedelta between the last backup and now exceeds
         # the configured maximum
-        if self.now - t_latest < delta:
+        if self.now - t_latest < delta - tolerance:
             logger.info('Skip {} backup'.format(interval['name']))
             logger.debug('Timedelta between last {} backup and now is too narrow for a new backup.'.format(interval['name']))
             logger.debug('Next backup will be possible at {}'.format((self.now + delta).strftime(self.date_format)))
