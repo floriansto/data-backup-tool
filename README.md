@@ -1,34 +1,141 @@
 # Data Backup Tool (DBT)
 
-DBT can be used to create backups from any linux pc to a connected external usb drive.
+The DBT is a centralized approach to backup your data from any linux PC to a central linux driven server.
+The tool should run on your central machine where you want to store your data.
 
-# Functionality
-## Incremental backups
-DBT creates incremental backups for faster runtimes and less storage consumption.
-Every snapshot contains the full file structure of your backed up folders.
-Therefore hardlinks are used.
-Only updated files are getting copied to the newly created snapshot.
-Since it is not recommended to keep only one copy of your data and always create hardlinks to it you can specify after which time a new full backup is created.
+Backups to the same machine (or to a connected external drive) are also possible.
 
-## Automatical backups
-If you plug your drive into your machine it gets mounted automatically.
-The new snapshot gets created and the drive is unmounted afterwards.
-For security reasons you have to specify the UUIDs for allowed drives to be automounted.
+## Backups
+After a given interval (or when starting fresh) a new full backup is created.
+Between the full backups the tool creates incremental backups for faster speeds. Only changed files are transferred.
+
+Every backup (snapshot and full) contains the whole folderstructure of the included files.
+To achieve this for the snapshots, hardlinks are used.
+Disadvantage is, that files that do not change are only stored on time on the disk.
+If this file is damaged, it is damaged in all incremetal backups.
+To keep this risk low full backups are performed after a configured interval.
+
+## Configuration
+The configuration file needs the following layout:
+```yaml
+target_dir: 'backup_destination_without_trailing_slash'
+latest: 'latest'
+src:
+  - '/'
+exclude:
+  - '*'
+date_format: '%Y-%m-%d_%H-%M-%S'
+full:
+  cycle:
+    days: 90
+    hours: 0
+    minutes: 0
+    seconds: 0
+intervals:
+  - name: hourly
+    prio: 4
+    num: 20
+    cycle:
+      days: 0
+      hours: 1
+      minutes: 0
+      seconds: 0
+```
+### target_dir
+The `target_dir` is the directory where the backup is stored.
+**Important: This path should not have a trailing slash**
+
+### latest
+Name of the symlink to the newest backup
+
+### src
+Array of source files and folders
+
+## exclude
+Exclude patterns which should not be in the backup
+
+### date_format
+Date format for the backup folders
+
+### full
+Configuration for the full backup.
+
+### intervals
+Array of intervals for the incremental backups.
+`num` specifies the number of backups to store.
+If this number is exceeded, the oldest backup gets deleted before a new backup is created.
+
+The `prio` defines the priority of the interval.
+Backups are performed from the interval with the highest prio to the lowest.
+Backups with the shortest interval should have the highest priority.
+
+## Folder structure
+The generated folder structure can look like
+```
+|- 2020-01-01_22-32-54
+|  |
+|  +- hourly
+|     |
+|     +- 2020-01-01-22-32-54
+|     +- 2020-01-01-23-32-54
+|     +- latest --> 2020-01-01-23-32-54
+|  +- daily
+|     |
+|     +- 2020-01-01-22-32-54
+|     +- 2020-01-02-22-32-54
+|     +- latest --> 2020-01-02-22-32-54
++- latest --> 2020-01-01_22-32-54
+```
+The first level represent full backups, all unterlying levels are incremental snapshots.
 
 ## Required tools
-The backup mechanism is based on `rsnapshot` which uses `rsync` to transfer the files.
+The following packages are neede:
+- rsync
+- cp
+- python >= 3.8
+- python-pip
 
-## Security
-* Allowlist of UUIDs for automounted devices
-* Encrypted backup drive
-
-# Process description
-1. Plugin drive
-2. If allowed, mound drive and decrypt, else exit
-3. Check if a new full backup should be created
-    *  Use symlink `latest` which points to the latest full backup
-4. Create the incremental backup using rsnapshot and its configuration
+## Python requirements
+The following packages are used
+- click
+- shutil
+- pyyaml
 
 # Usage
-Comes when its ready to use.
+To get an overview of all options run
+```sh
+./src/main.py --help
+```
+The tool is called using
+```sh
+./src/main.py [OPTIONS] CONFIG
+```
+where `CONFIG` specifies your configuration file.
+
+## Options
+```
+  -s, --ssh           Use ssh connection to get backup files
+  -h, --host TEXT     When using ssh, connect to this host. May be hostname or
+                      ip adress
+
+  -p, --port INTEGER  When using ssh, use this port
+  -u, --user TEXT     When using ssh, use this user
+  -n, --no-relatives  Do not use relative path names. Disables the -R option
+                      of rsync.
+
+  -v, --verbose       Additional output to the logfile
+  --help              Show this message and exit.
+```
+
+## SSH connection
+When you use the ssh connection make sure that your backup machine has access to your given host.
+Currently you can only sync from a remote machine to a local machine and **not** the other way around.
+
+## Logging
+Logs are stored under `/var/log/dbt/` with the naming scheme `backup_HOST.log`.
+On every run a new file is created. The last 10 files are kept.
+
+# Todo
+- Sending email on failure
+- Do backup to remote machine
 
