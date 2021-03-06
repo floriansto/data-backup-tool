@@ -135,6 +135,30 @@ Currently you can only sync from a remote machine to a local machine and **not**
 Logs are stored under `/var/log/dbt/` with the naming scheme `backup_HOST.log`.
 On every run a new file is created. The last 10 files are kept.
 
+# Automation
+You can simply call the `main.py` script from a cronjob from your backup machine.
+This is the best solution, if you want to backup machines which are always online.
+
+If you want to backup e.g. your laptop which is not online 24/7 you can create a cronjob
+on your local machine where you establish a ssh connection to your backup machine and call
+the `main.py` script from there:
+```sh
+ssh -p <PORT> <USER>@<BACKUP_MACHINE> "<call of main.py with all options>"
+```
+
+# Lock process
+To prevent starting the same configuration multiple times for the same host, a lockfile is generated at the start.
+After finishing the file is deleted.
+However under specific circumstances (e.g. unexpected shutdown) the file gets not deleted and the next backup process can't start.
+You have to manually delete the lockfile then to start the backup process again.
+
+# Unfinished/failed backups
+When starting a new backup, the symlink to the latest backup is preserved and a new symlink named with the prefix `_new` is created.
+This link points to the newly created backup.
+After successfully finishing the backup the `_new` symlink gets renamed to the configured `latest` name.
+When a backup fails, the `_new` symlink and the folder it links to are deleted.
+This cleanup occurs at the end of the `main.py` script if the error can be caught and at the start of the backup.
+
 # Todo
 - Sending email on failure
 - Do backup to remote machine
