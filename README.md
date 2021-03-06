@@ -43,7 +43,7 @@ intervals:
 ```
 ### target_dir
 The `target_dir` is the directory where the backup is stored.
-**Important: This path should not have a trailing slash**
+**Important: Trailing slashes are ignored.**
 
 ### latest
 Name of the symlink to the newest backup
@@ -51,7 +51,7 @@ Name of the symlink to the newest backup
 ### src
 Array of source files and folders
 
-## exclude
+### exclude
 Exclude patterns which should not be in the backup
 
 ### date_format
@@ -75,10 +75,10 @@ The generated folder structure can look like
 |- 2020-01-01_22-32-54
 |  |
 |  +- hourly
-|     |
-|     +- 2020-01-01-22-32-54
-|     +- 2020-01-01-23-32-54
-|     +- latest --> 2020-01-01-23-32-54
+|  |  |
+|  |  +- 2020-01-01-22-32-54
+|  |  +- 2020-01-01-23-32-54
+|  |  +- latest --> 2020-01-01-23-32-54
 |  +- daily
 |     |
 |     +- 2020-01-01-22-32-54
