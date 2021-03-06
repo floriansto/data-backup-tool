@@ -1,17 +1,28 @@
 ---
+# Target directory (IMPORTANT: No trailing slash!!!
 target_dir: 'backup_destination_without_trailing_slash'
+# Name of the symlink to the latest backup
 latest: 'latest'
+# Source files and folders
 src:
   - '/'
+# Exclude patterns
 exclude:
   - '*'
+# Date format for the backups
 date_format: '%Y-%m-%d_%H-%M-%S'
+# Interval for full backups
 full:
   cycle:
     days: 90
     hours: 0
     minutes: 0
     seconds: 0
+# Intervals for incremental snapshots
+# Interval with the highest prio will be
+# performed first
+# The interval with the lowest time range
+# should have the highest priority
 intervals:
   - name: hourly
     prio: 4
