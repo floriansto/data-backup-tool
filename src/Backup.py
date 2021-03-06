@@ -8,7 +8,7 @@ import glob
 import signal
 import sys
 import shutil
-
+from datetime import timedelta
 
 logger = logging.getLogger('backup')
 
@@ -35,6 +35,16 @@ class Backup:
         signal.signal(signal.SIGSEGV, self.interrupt_handler)
         signal.signal(signal.SIGHUP, self.interrupt_handler)
 
+    def cleanup(self):
+        """
+        Cleanup when exiting with an error.
+        """
+        logger.error('Current active backup: {}'.format(os.path.realpath(self.current_target_dir)))
+        logger.error('Remove active backup and restore symlink to newest bakup')
+        util.cleanup(self.current_target_dir)
+        self.current_target_dir = None
+        os.remove(self.settings['lockfile'])
+
     def interrupt_handler(self, signum, frame):
         """
         Handler for interrupt signals, deletes the in progress backup and
@@ -43,11 +53,7 @@ class Backup:
         :param frame: stack frame
         """
         logger.error('Got signal {}. Stop process and cleanup'.format(signum))
-        logger.error('Current active backup: {}'.format(os.path.realpath(self.current_target_dir)))
-        logger.error('Remove active backup and restore symlink to newest bakup')
-        util.cleanup(self.current_target_dir)
-        self.current_target_dir = None
-        os.remove(self.settings['lockfile'])
+        self.cleanup()
         sys.exit(signum)
 
     def sort_intervals(self):
@@ -82,6 +88,7 @@ class Backup:
             logger.error(' '.join(ret.args))
             logger.error(ret.stderr)
             logger.error('Aborting backup')
+            self.cleanup()
             raise subprocess.CalledProcessError(returncode=ret.returncode, cmd = ret.args, stderr = ret.stdout)
 
     def prepare_backup(self, interval):
@@ -108,9 +115,11 @@ class Backup:
         else:
             t_latest = util.time_from_str('0', '%S')
 
+        # Tolerance for delta check between now and last backup
+        tolerance = timedelta(seconds=5)
         # Check if the timedelta between the last backup and now exceeds
         # the configured maximum
-        if self.now - t_latest < delta:
+        if self.now - t_latest < delta - tolerance:
             logger.info('Skip {} backup'.format(interval['name']))
             logger.debug('Timedelta between last {} backup and now is too narrow for a new backup.'.format(interval['name']))
             logger.debug('Next backup will be possible at {}'.format((self.now + delta).strftime(self.date_format)))
@@ -190,6 +199,7 @@ class Backup:
             logger.error(' '.join(ret.args))
             logger.error(ret.stderr)
             logger.error('Aborting backup')
+            self.cleanup()
             raise subprocess.CalledProcessError(returncode=ret.returncode, cmd = ret.args, stderr = ret.stdout)
         logger.info('Finished {} backup'.format(interval['name']))
         if os.path.exists(last):
