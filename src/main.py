@@ -54,6 +54,8 @@ def main(config, host, port, user, ssh, no_relatives, verbose):
     with open(config) as f:
         yml_config = yaml.safe_load(f)
 
+    yml_config['target_dir'] = yml_config['target_dir'].rstrip('/')
+
     yml_config['user'] = user
     yml_config['port'] = port
     yml_config['host'] = host
