@@ -188,7 +188,7 @@ class Backup:
         arg = 'rsync -rahs{} -zz --no-perms --info=progress2 --delete-excluded --delete {}'\
             .format(rels, exclude)
         cmd = arg.split(' ')
-        cmd = [i for i in cmd if i is not '']
+        cmd = [i for i in cmd if i != '']
         cmd += ssh
         cmd += src.split(' ')
         cmd += [dest]
